@@ -1,55 +1,46 @@
-import time
 import requests
-from flask import Flask
-from threading import Thread
+import time
+import telegram
+from bs4 import BeautifulSoup
 
-# === CONFIGURATION ===
-BOT_TOKEN = "7840863675:AAETQXyAkyJv4JgqsNbhMyDnDpAQ6B7lrVM"
-CHAT_ID = "902064209"
-CHECK_INTERVAL = 300  # 5 minutes
-CROUS_URL = "https://trouverunlogement.lescrous.fr/tools/4.1.2/search/logements?lieu=Clermont-Ferrand"
+# Ton token et ID Telegram
+TELEGRAM_TOKEN = "7840863675:AAETQXyAkyJv4JgqsNbhMyDnDpAQ6B7lrVM"
+CHAT_ID = 902064209
 
-# === FUNCTIONS ===
-def check_dispo():
+# Initialiser le bot
+bot = telegram.Bot(token=TELEGRAM_TOKEN)
+
+# URL à surveiller
+CROUS_URL = "https://trouverunlogement.lescrous.fr/tools/search/logement?type%5B%5D=1&location=Clermont-Ferrand"
+
+# Dernier titre vu
+dernier_titre = ""
+
+def verifier_disponibilite():
+    global dernier_titre
+
     try:
-        response = requests.get(CROUS_URL)
-        data = response.json()
-        return bool(data.get("logements"))
+        response = requests.get(CROUS_URL, timeout=10)
+        soup = BeautifulSoup(response.text, 'html.parser')
+
+        logements = soup.select(".search-logement-title")
+
+        if logements:
+            titre = logements[0].text.strip()
+
+            if titre != dernier_titre:
+                message = f"🏠 Nouveau logement à Clermont-Ferrand : {titre}"
+                bot.send_message(chat_id=CHAT_ID, text=message)
+                dernier_titre = titre
+            else:
+                print("Pas de nouveau logement.")
+        else:
+            print("Aucun logement trouvé.")
     except Exception as e:
-        print("❌ Erreur :", e)
-        return False
+        print(f"Erreur lors de la vérification : {e}")
 
-def envoyer(message):
-    try:
-        requests.post(f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage", data={
-            "chat_id": CHAT_ID,
-            "text": message
-        })
-        print("✅ Message envoyé :", message)
-    except Exception as e:
-        print("❌ Erreur Telegram :", e)
-
-# === KEEP-ALIVE FLASK SERVER ===
-app = Flask('')
-
-@app.route('/')
-def home():
-    return "✅ Bot CROUS actif"
-
-def run():
-    app.run(host='0.0.0.0', port=8080)
-
-Thread(target=run).start()
-
-# === BOT FUNCTIONALITY ===
-envoyer("🚀 Bot lancé et surveille les logements à Clermont-Ferrand")
-
-sent = False
+# Boucle infinie (vérifie toutes les 5 minutes)
+print("🤖 Bot lancé... Surveillance en cours.")
 while True:
-    dispo = check_dispo()
-    if dispo and not sent:
-        envoyer("🏠 Logement CROUS dispo ! Va vite voir.")
-        sent = True
-    elif not dispo:
-        sent = False
-    time.sleep(CHECK_INTERVAL)
+    verifier_disponibilite()
+    time.sleep(300)  # 5 minutes
