@@ -1,46 +1,39 @@
 import requests
-import time
-import telegram
 from bs4 import BeautifulSoup
+from telegram import Bot
+import time
+import os
 
-# Ton token et ID Telegram
-TELEGRAM_TOKEN = "7840863675:AAETQXyAkyJv4JgqsNbhMyDnDpAQ6B7lrVM"
-CHAT_ID = 902064209
+# Utilise les variables d'environnement si tu préfères
+TOKEN = "7840863675:AAETQXyAkyJv4JgqsNbhMyDnDpAQ6B7lrVM"
+CHAT_ID = "902064209"
+URL = "https://trouverunlogement.lescrous.fr/tools/search/logement?type[]=1&location=Clermont-Ferrand"
 
-# Initialiser le bot
-bot = telegram.Bot(token=TELEGRAM_TOKEN)
+bot = Bot(token=TOKEN)
+derniere_annonce = ""
 
-# URL à surveiller
-CROUS_URL = "https://trouverunlogement.lescrous.fr/tools/search/logement?type%5B%5D=1&location=Clermont-Ferrand"
-
-# Dernier titre vu
-dernier_titre = ""
-
-def verifier_disponibilite():
-    global dernier_titre
-
+def check_crous():
+    global derniere_annonce
     try:
-        response = requests.get(CROUS_URL, timeout=10)
-        soup = BeautifulSoup(response.text, 'html.parser')
+        response = requests.get(URL, timeout=10)
+        soup = BeautifulSoup(response.text, "html.parser")
+        annonces = soup.find_all("h2", class_="search-logement-title")
 
-        logements = soup.select(".search-logement-title")
-
-        if logements:
-            titre = logements[0].text.strip()
-
-            if titre != dernier_titre:
-                message = f"🏠 Nouveau logement à Clermont-Ferrand : {titre}"
-                bot.send_message(chat_id=CHAT_ID, text=message)
-                dernier_titre = titre
+        if annonces:
+            titre = annonces[0].get_text(strip=True)
+            if titre != derniere_annonce:
+                derniere_annonce = titre
+                bot.send_message(chat_id=CHAT_ID, text=f"🏠 Nouveau logement : {titre}")
+                print(f"Nouveau logement envoyé : {titre}")
             else:
-                print("Pas de nouveau logement.")
+                print("Aucune nouvelle annonce.")
         else:
-            print("Aucun logement trouvé.")
+            print("Aucune annonce trouvée.")
     except Exception as e:
         print(f"Erreur lors de la vérification : {e}")
 
-# Boucle infinie (vérifie toutes les 5 minutes)
-print("🤖 Bot lancé... Surveillance en cours.")
+print("🤖 Bot démarré. Surveillance toutes les 5 minutes.")
+
 while True:
-    verifier_disponibilite()
-    time.sleep(300)  # 5 minutes
+    check_crous()
+    time.sleep(300)
